@@ -4199,21 +4199,18 @@ function generateXrayRealityShortId() {
 }
 
 # Parse xray x25519 key output into xrayRealityPrivateKey and xrayRealityPublicKey.
-# Supports two formats:
+# Supports three schemas by version:
 #   Old (< 25.3.6): "Private key: <key>" / "Public key: <key>"
 #   New (>= 25.3.6): "PrivateKey: <key>" / "Password: <key>" / "Hash32: <key>"
-# Uses grep to match by field name rather than by line position.
+#   Clarified (>= 26.3.23 / 26.6.1): "PrivateKey: <key>" / "Password (PublicKey): <key>" / "Hash32: <key>"
+# Match by field name and split on the first colon so label wording changes do not break parsing.
 function parseXrayRealityKeys(){
-    xrayRealityPrivateKey=$(echo "${xrayRealityX25519Key}" | grep -i "^Private" | awk '{print $NF}')
+    local privateKeyLinePattern='^Private([[:space:]]+key|Key):[[:space:]]*'
+    # Public key label changed from "Public key" -> "Password" -> "Password (PublicKey)" across Xray versions.
+    local publicKeyLinePattern='^(Password([[:space:]]*\(PublicKey\))?|Public([[:space:]]+key|Key)):[[:space:]]*'
 
-    # xray >= 25.3.6 renamed "Public key" to "Password" to avoid misunderstanding
-    local _password
-    _password=$(echo "${xrayRealityX25519Key}" | grep "^Password:" | awk '{print $NF}')
-    if [[ -n "${_password}" ]]; then
-        xrayRealityPublicKey="${_password}"
-    else
-        xrayRealityPublicKey=$(echo "${xrayRealityX25519Key}" | grep -i "^Public" | awk '{print $NF}')
-    fi
+    xrayRealityPrivateKey=$(printf '%s\n' "${xrayRealityX25519Key}" | grep -Ei "${privateKeyLinePattern}" | head -n 1 | cut -d: -f2- | xargs)
+    xrayRealityPublicKey=$(printf '%s\n' "${xrayRealityX25519Key}" | grep -Ei "${publicKeyLinePattern}" | head -n 1 | cut -d: -f2- | xargs)
 }
 
 function generateXrayRealityPrivateKey(){
